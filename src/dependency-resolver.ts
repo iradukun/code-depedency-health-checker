@@ -1,7 +1,8 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as semver from 'semver';
-import * as execa from 'execa'; // For running Yarn commands
+import { exec } from 'child_process';
+import { checkPackageManager } from './package-manager-checker';
 
 interface DependencyData {
   dependencies: Record<string, string>;
@@ -38,54 +39,52 @@ class DependencyResolver {
             const versionA = allDependencies[packageNameA];
             const versionB = allDependencies[packageNameB];
             if (!semver.satisfies(versionA, versionB) && !semver.satisfies(versionB, versionA)) {
-              // Versions are incompatible; try to resolve by updating
-              const resolvedVersion = await this.findCompatibleVersion(packageNameA, packageNameB);
-              if (resolvedVersion) {
-                console.log(
-                  `Resolved incompatibility between ${packageNameA} and ${packageNameB} by updating to ${resolvedVersion}`
-                );
-                allDependencies[packageNameA] = resolvedVersion;
-                allDependencies[packageNameB] = resolvedVersion;
+                console.log("Versions are incompatible; try to resolve by updating using npm or yarn");
+              // Versions are incompatible; try to resolve by updating using npm or yarn
+              const result = await this.updateDependencyVersion(packageNameA, versionA, packageNameB, versionB);
+              if (result.success) {
+                console.log(result.message);
               } else {
-                console.warn(`Unable to resolve incompatibility between ${packageNameA} and ${packageNameB}`);
+                console.warn(result.message);
               }
             }
           }
         }
       }
 
-      // Update package.json with resolved versions
-      const updatedPackageJson = { ...dependencies, ...devDependencies };
-      await fs.writeJSON(this.packageJsonPath, updatedPackageJson, { spaces: 2 });
-      console.log('Dependency resolution complete. package.json updated.');
+      console.log('Dependency resolution complete.');
     } catch (error) {
       console.error(error);
     }
   }
 
-  private async findCompatibleVersion(packageA: string, packageB: string): Promise<string | undefined> {
-    try {
-      // Use Yarn to find a compatible version
-      const result = await execa('yarn', ['upgrade', '--json', `${packageA}@*`, `${packageB}@*`]);
-
-      // Parse Yarn's JSON output to get the updated version
-      const yarnOutput = JSON.parse(result.stdout);
-      const updatedPackages = yarnOutput.data.body.upgrades;
-      if (updatedPackages) {
-        const updatedPackage = updatedPackages[`${packageA}@${packageB}`];
-        if (updatedPackage) {
-          return updatedPackage.latest;
-        }
-      }
-    } catch (error) {
-      console.error(`Error resolving compatibility for ${packageA} and ${packageB}: ${error}`);
+  private async updateDependencyVersion(
+    packageNameA: string,
+    versionA: string,
+    packageNameB: string,
+    versionB: string
+  ): Promise<{ success: boolean; message: string }> {
+    const packageManager = await checkPackageManager();
+    if (!packageManager) {
+      return { success: false, message: 'Unable to determine the package manager.' };
     }
-
-    return undefined;
+  
+    const updateCommand = packageManager === 'yarn'
+      ? `yarn upgrade ${packageNameA} ${packageNameB}`
+      : `npm update ${packageNameA} ${packageNameB}`;
+  
+    return new Promise((resolve) => {
+      exec(updateCommand, (error, stdout, stderr) => {
+        if (error) {
+          resolve({ success: false, message: `Failed to resolve ${packageNameA} and ${packageNameB}: ${error.message}` });
+        } else {
+          resolve({ success: true, message: `Resolved ${packageNameA} and ${packageNameB} by updating versions.` });
+        }
+      });
+    });
   }
 }
 
-// Usage
 (async () => {
   const resolver = new DependencyResolver();
   await resolver.resolveIncompatibilities();
