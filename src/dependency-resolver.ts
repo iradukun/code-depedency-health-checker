@@ -1,6 +1,7 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as semver from 'semver';
+import * as execa from 'execa'; // For running Yarn commands
 
 interface DependencyData {
   dependencies: Record<string, string>;
@@ -26,52 +27,61 @@ class DependencyResolver {
     }
   }
 
-  private async updateDependencyVersion(packageName: string, newVersion: string): Promise<void> {
-    try {
-      const packageJson = await fs.readJSON(this.packageJsonPath);
-      packageJson.dependencies[packageName] = newVersion;
-      await fs.writeJSON(this.packageJsonPath, packageJson, { spaces: 2 });
-      console.log(`Updated ${packageName} to version ${newVersion}`);
-    } catch (error) {
-      console.error(`Error updating ${packageName} version: ${error}`);
-    }
-  }
-
   async resolveIncompatibilities(): Promise<void> {
     try {
       const { dependencies, devDependencies } = await this.readPackageJson();
       const allDependencies = { ...dependencies, ...devDependencies };
-      const dependencyVersions = Object.entries(allDependencies).reduce(
-        (versions, [packageName, version]) => {
-          versions[packageName] = version;
-          return versions;
-        },
-        {} as Record<string, string>
-      );
 
-      for (const [packageNameA, versionA] of Object.entries(dependencyVersions)) {
-        for (const [packageNameB, versionB] of Object.entries(dependencyVersions)) {
+      for (const packageNameA in allDependencies) {
+        for (const packageNameB in allDependencies) {
           if (packageNameA !== packageNameB) {
-            const isCompatible =
-              semver.satisfies(versionA, versionB) || semver.satisfies(versionB, versionA);
-            if (!isCompatible) {
-              // Resolve by updating to the latest compatible version
-              const latestCompatibleVersion = semver.maxSatisfying(
-                [versionA, versionB],
-                `^${versionA}`
-              );
-              if (latestCompatibleVersion) {
-                await this.updateDependencyVersion(packageNameA, latestCompatibleVersion);
+            const versionA = allDependencies[packageNameA];
+            const versionB = allDependencies[packageNameB];
+            if (!semver.satisfies(versionA, versionB) && !semver.satisfies(versionB, versionA)) {
+              // Versions are incompatible; try to resolve by updating
+              const resolvedVersion = await this.findCompatibleVersion(packageNameA, packageNameB);
+              if (resolvedVersion) {
+                console.log(
+                  `Resolved incompatibility between ${packageNameA} and ${packageNameB} by updating to ${resolvedVersion}`
+                );
+                allDependencies[packageNameA] = resolvedVersion;
+                allDependencies[packageNameB] = resolvedVersion;
+              } else {
+                console.warn(`Unable to resolve incompatibility between ${packageNameA} and ${packageNameB}`);
               }
             }
           }
         }
       }
 
-      console.log('Incompatibilities resolved.');
+      // Update package.json with resolved versions
+      const updatedPackageJson = { ...dependencies, ...devDependencies };
+      await fs.writeJSON(this.packageJsonPath, updatedPackageJson, { spaces: 2 });
+      console.log('Dependency resolution complete. package.json updated.');
     } catch (error) {
       console.error(error);
     }
+  }
+
+  private async findCompatibleVersion(packageA: string, packageB: string): Promise<string | undefined> {
+    try {
+      // Use Yarn to find a compatible version
+      const result = await execa('yarn', ['upgrade', '--json', `${packageA}@*`, `${packageB}@*`]);
+
+      // Parse Yarn's JSON output to get the updated version
+      const yarnOutput = JSON.parse(result.stdout);
+      const updatedPackages = yarnOutput.data.body.upgrades;
+      if (updatedPackages) {
+        const updatedPackage = updatedPackages[`${packageA}@${packageB}`];
+        if (updatedPackage) {
+          return updatedPackage.latest;
+        }
+      }
+    } catch (error) {
+      console.error(`Error resolving compatibility for ${packageA} and ${packageB}: ${error}`);
+    }
+
+    return undefined;
   }
 }
 
