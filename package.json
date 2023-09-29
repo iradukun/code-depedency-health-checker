@@ -1,0 +1,16 @@
+{
+  "name": "code-depedency-health-checker",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/iradukun/code-depedency-health-checker.git",
+  "author": "iradukun <mustaphairadukunda@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.7.1",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@types/fs-extra": "^11.0.2",
+    "fs-extra": "^11.1.1"
+  }
+}
