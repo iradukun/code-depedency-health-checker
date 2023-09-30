@@ -1,6 +1,7 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as semver from 'semver';
+import { DependencyResolver } from './dependency-resolver'
 
 interface DependencyData {
   dependencies: Record<string, string>;
@@ -59,13 +60,17 @@ class DependencyAnalyzer {
       if (this.areVersionsCompatible(dependencyVersions)) {
         console.log('All dependencies have compatible versions.');
       } else {
-        console.warn('Some dependencies have incompatible versions. Resolution required.');
+        const resolver = new DependencyResolver();
+        await resolver.resolveIncompatibilities();
+        console.warn('Some dependencies have incompatible versions');
+        // Resolve incompatibilities using the DependencyResolver class
       }
     } catch (error) {
       console.error(error);
     }
   }
 }
+
 
 (async () => {
   const analyzer = new DependencyAnalyzer();

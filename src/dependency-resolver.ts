@@ -9,7 +9,7 @@ interface DependencyData {
   devDependencies: Record<string, string>;
 }
 
-class DependencyResolver {
+export class DependencyResolver {
   private readonly packageJsonPath: string;
 
   constructor() {
@@ -85,7 +85,12 @@ class DependencyResolver {
   }
 }
 
-(async () => {
-  const resolver = new DependencyResolver();
-  await resolver.resolveIncompatibilities();
-})();
+
+
+
+export async function resolveIncompatibilitiesAndNotify(): Promise<void> {
+    const resolver = new DependencyResolver();
+    await resolver.resolveIncompatibilities();
+    console.log('Dependency resolution complete.');
+  }
+  
