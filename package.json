@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon --exec ts-node src/dependency-analyzer.ts"
+    "start": " ts-node src/dependency-analyzer.ts"
   },
   "devDependencies": {
     "@types/node": "^20.7.1",
