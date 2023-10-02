@@ -39,9 +39,16 @@ export class DependencyResolver {
             const versionA = allDependencies[packageNameA];
             const versionB = allDependencies[packageNameB];
             if (!semver.satisfies(versionA, versionB) && !semver.satisfies(versionB, versionA)) {
-                console.log("Versions are incompatible; try to resolve by updating using npm or yarn");
+              console.warn(
+                `${packageNameA} (${versionA}) and ${packageNameB} (${versionB}) have incompatible versions`
+              );
               // Versions are incompatible; try to resolve by updating using npm or yarn
-              const result = await this.updateDependencyVersion(packageNameA, versionA, packageNameB, versionB);
+              const result = await this.updateDependencyVersion(
+                packageNameA,
+                versionA,
+                packageNameB,
+                versionB
+              );
               if (result.success) {
                 console.log(result.message);
               } else {
@@ -54,7 +61,7 @@ export class DependencyResolver {
 
       console.log('Dependency resolution complete.');
     } catch (error) {
-      console.error(error);
+      console.error('Error resolving incompatibilities:', error);
     }
   }
 
@@ -68,11 +75,11 @@ export class DependencyResolver {
     if (!packageManager) {
       return { success: false, message: 'Unable to determine the package manager.' };
     }
-  
+
     const updateCommand = packageManager === 'yarn'
       ? `yarn upgrade ${packageNameA} ${packageNameB}`
       : `npm update ${packageNameA} ${packageNameB}`;
-  
+
     return new Promise((resolve) => {
       exec(updateCommand, (error, stdout, stderr) => {
         if (error) {
@@ -85,12 +92,8 @@ export class DependencyResolver {
   }
 }
 
-
-
-
 export async function resolveIncompatibilitiesAndNotify(): Promise<void> {
-    const resolver = new DependencyResolver();
-    await resolver.resolveIncompatibilities();
-    console.log('Dependency resolution complete.');
-  }
-  
+  const resolver = new DependencyResolver();
+  await resolver.resolveIncompatibilities();
+  console.log('Dependency resolution complete.');
+}

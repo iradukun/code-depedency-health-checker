@@ -1,7 +1,7 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as semver from 'semver';
-import { DependencyResolver } from './dependency-resolver'
+import { resolveIncompatibilitiesAndNotify } from './dependency-resolver';
 
 interface DependencyData {
   dependencies: Record<string, string>;
@@ -57,20 +57,41 @@ class DependencyAnalyzer {
         {} as Record<string, string>
       );
 
-      if (this.areVersionsCompatible(dependencyVersions)) {
+      let incompatibilitiesFound = false;
+
+      for (const packageNameA in allDependencies) {
+        for (const packageNameB in allDependencies) {
+          if (packageNameA !== packageNameB) {
+            const versionA = allDependencies[packageNameA];
+            const versionB = allDependencies[packageNameB];
+            if (!semver.satisfies(versionA, versionB) && !semver.satisfies(versionB, versionA)) {
+              console.warn(
+                `${packageNameA} (${versionA}) and ${packageNameB} (${versionB}) have incompatible versions`
+              );
+              incompatibilitiesFound = true;
+            }
+          }
+        }
+      }
+
+      if (!incompatibilitiesFound) {
         console.log('All dependencies have compatible versions.');
       } else {
-        const resolver = new DependencyResolver();
-        await resolver.resolveIncompatibilities();
-        console.warn('Some dependencies have incompatible versions');
-        // Resolve incompatibilities using the DependencyResolver class
+        console.warn('Some dependencies have incompatible versions. Resolution required.');
+
+        try {
+          console.log('Resolving incompatibilities...');
+          await resolveIncompatibilitiesAndNotify();
+          console.log('Incompatibilities resolved.');
+        } catch (error) {
+          console.error('Error resolving incompatibilities:', error);
+        }
       }
     } catch (error) {
       console.error(error);
     }
   }
 }
-
 
 (async () => {
   const analyzer = new DependencyAnalyzer();
